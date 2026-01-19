@@ -22,7 +22,7 @@
     },
     {
       "parameters": {
-        "command": "python3 /home/node/scripts/publish_video.py --video {{ $json.video_path }} --title \"{{ $json.title }}\" --description \"{{ $json.description }}\" --tags {{ $json.tags.join(' ') }} --privacy {{ $json.privacy_status }}"
+        "command": "cd /home/node && python3 -m scripts.publish_video --video {{ $json.video_path }} --title \"{{ $json.title }}\" --description \"{{ $json.description }}\" --tags {{ $json.tags.join(' ') }} --privacy {{ $json.privacy_status }}"
       },
       "id": "upload-video",
       "name": "YouTube投稿（Python）",

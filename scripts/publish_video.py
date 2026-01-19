@@ -54,6 +54,31 @@ class VideoPublisher:
             token_file=token_file,
         )
 
+    def _get_video_metadata(self, video_path: Path) -> dict[str, Any]:
+        """
+        動画ファイルからメタデータを取得
+
+        Args:
+            video_path: 動画ファイルのパス
+
+        Returns:
+            メタデータ（duration, width, height, aspect_ratio）
+        """
+        try:
+            from moviepy import VideoFileClip
+
+            with VideoFileClip(str(video_path)) as clip:
+                return {
+                    "duration": clip.duration,
+                    "width": clip.size[0],
+                    "height": clip.size[1],
+                    "aspect_ratio": clip.size[1] / clip.size[0] if clip.size[0] > 0 else 0,
+                    "fps": clip.fps,
+                }
+        except Exception as e:
+            logger.warning(f"動画メタデータ取得エラー: {e}")
+            return {}
+
     def _validate_for_shorts(
         self,
         video_path: Path,
@@ -64,7 +89,7 @@ class VideoPublisher:
 
         Args:
             video_path: 動画ファイルのパス
-            duration: 動画の長さ（秒）
+            duration: 動画の長さ（秒）、省略時は動画から取得
 
         Returns:
             検証結果
@@ -77,21 +102,45 @@ class VideoPublisher:
             errors.append(f"動画ファイルが見つかりません: {video_path}")
             return {"valid": False, "errors": errors, "warnings": warnings}
 
+        # 動画メタデータを取得
+        metadata = self._get_video_metadata(video_path)
+
+        # duration引数がなければメタデータから取得
+        actual_duration = duration if duration is not None else metadata.get("duration")
+
         # 長さチェック
-        if duration is not None:
-            if duration > self.MAX_DURATION_SECONDS:
+        if actual_duration is not None:
+            if actual_duration > self.MAX_DURATION_SECONDS:
                 errors.append(
-                    f"動画が長すぎます: {duration:.1f}秒（最大{self.MAX_DURATION_SECONDS}秒）"
+                    f"動画が長すぎます: {actual_duration:.1f}秒（最大{self.MAX_DURATION_SECONDS}秒）"
                 )
-            elif duration < self.MIN_DURATION_SECONDS:
+            elif actual_duration < self.MIN_DURATION_SECONDS:
                 warnings.append(
-                    f"動画が短すぎる可能性があります: {duration:.1f}秒（推奨{self.MIN_DURATION_SECONDS}秒以上）"
+                    f"動画が短すぎる可能性があります: {actual_duration:.1f}秒（推奨{self.MIN_DURATION_SECONDS}秒以上）"
+                )
+
+        # アスペクト比チェック（縦長であること）
+        aspect_ratio = metadata.get("aspect_ratio")
+        if aspect_ratio is not None:
+            if aspect_ratio < self.REQUIRED_ASPECT_RATIO * 0.9:  # 10%の許容誤差
+                warnings.append(
+                    f"縦長動画ではありません: アスペクト比 {aspect_ratio:.2f}（推奨: {self.REQUIRED_ASPECT_RATIO}以上）"
+                )
+
+        # 解像度チェック
+        width = metadata.get("width")
+        height = metadata.get("height")
+        if width and height:
+            if width < 540 or height < 960:
+                warnings.append(
+                    f"解像度が低い可能性があります: {width}x{height}（推奨: 1080x1920）"
                 )
 
         return {
             "valid": len(errors) == 0,
             "errors": errors,
             "warnings": warnings,
+            "metadata": metadata,
         }
 
     async def upload(

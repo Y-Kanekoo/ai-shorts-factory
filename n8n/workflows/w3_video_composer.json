@@ -12,7 +12,7 @@
     },
     {
       "parameters": {
-        "command": "python3 /home/node/scripts/compose_video.py --audio-metadata {{ $json.audio_metadata_path }} --image-metadata {{ $json.image_metadata_path }} --output /home/node/output/videos/{{ $json.video_filename }}"
+        "command": "cd /home/node && python3 -m scripts.compose_video --audio-metadata {{ $json.audio_metadata_path }} --image-metadata {{ $json.image_metadata_path }} --output /home/node/output/videos/{{ $json.video_filename }}"
       },
       "id": "compose-video",
       "name": "動画合成（Python）",

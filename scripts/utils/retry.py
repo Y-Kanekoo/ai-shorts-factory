@@ -39,6 +39,18 @@ RETRYABLE_NETWORK_EXCEPTIONS = (
     httpx.PoolTimeout,
 )
 
+# Hugging Face / Gradio関連の例外名（動的チェック用）
+HF_RETRYABLE_EXCEPTION_NAMES = {
+    "HfHubHTTPError",  # huggingface_hub
+    "RepositoryNotFoundError",  # huggingface_hub
+    "GatedRepoError",  # huggingface_hub
+}
+
+GRADIO_RETRYABLE_EXCEPTION_NAMES = {
+    "AppError",  # gradio_client
+    "QueueError",  # gradio_client
+}
+
 # HTTPステータスコードでリトライ対象
 RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 
@@ -57,6 +69,39 @@ class RetryableHTTPError(Exception):
 def should_retry_response(response: httpx.Response) -> bool:
     """レスポンスがリトライ対象かどうかを判定"""
     return response.status_code in RETRYABLE_STATUS_CODES
+
+
+def _is_hf_or_gradio_retryable(exception: BaseException) -> bool:
+    """
+    Hugging FaceまたはGradioの例外がリトライ対象かどうかを判定
+
+    インポートなしで例外名でチェック（オプション依存対応）
+    """
+    exception_name = type(exception).__name__
+
+    # HfHubHTTPErrorの場合、ステータスコードをチェック
+    if exception_name == "HfHubHTTPError":
+        # HfHubHTTPErrorはresponseまたはstatus_code属性を持つ
+        status_code = getattr(exception, "response", None)
+        if status_code is not None:
+            status_code = getattr(status_code, "status_code", None)
+        if status_code is None:
+            # 直接status_code属性を確認
+            status_code = getattr(exception, "status_code", None)
+        if status_code and status_code in RETRYABLE_STATUS_CODES:
+            return True
+        # ステータスコードが取得できない場合もリトライ対象
+        return True
+
+    # その他のHugging Face例外
+    if exception_name in HF_RETRYABLE_EXCEPTION_NAMES:
+        return True
+
+    # Gradio例外
+    if exception_name in GRADIO_RETRYABLE_EXCEPTION_NAMES:
+        return True
+
+    return False
 
 
 def should_retry_exception(exception: BaseException) -> bool:
@@ -80,6 +125,10 @@ def should_retry_exception(exception: BaseException) -> bool:
     # HTTPステータスエラー（429, 5xx）
     if isinstance(exception, httpx.HTTPStatusError):
         return exception.response.status_code in RETRYABLE_STATUS_CODES
+
+    # Hugging Face / Gradio例外
+    if _is_hf_or_gradio_retryable(exception):
+        return True
 
     return False
 

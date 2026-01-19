@@ -1,0 +1,27 @@
+# AI Shorts Factory - 本番用依存パッケージ
+# Python 3.11+
+
+# === 共通 ===
+python-dotenv==1.0.1
+pydantic==2.10.4
+pydantic-settings==2.7.1
+httpx==0.28.1
+aiofiles==24.1.0
+tenacity==9.0.0
+
+# === 台本生成（Track A） ===
+huggingface-hub==0.27.1
+
+# === 画像生成（Track C） ===
+gradio-client==1.5.3
+Pillow==10.4.0
+
+# === 動画合成（Track E） ===
+moviepy==2.1.2
+openai-whisper==20240930
+numpy==1.26.4
+
+# === YouTube投稿（Track F） ===
+google-api-python-client==2.159.0
+google-auth-oauthlib==1.2.1
+google-auth-httplib2==0.2.0

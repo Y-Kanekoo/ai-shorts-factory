@@ -22,6 +22,8 @@ from moviepy import (
 
 from scripts.config import config
 from scripts.constants import (
+    DEFAULT_SUBTITLE_FONT,
+    JAPANESE_FONTS,
     SUBTITLE_FONT_SIZE,
     SUBTITLE_MARGIN_BOTTOM,
     SUBTITLE_PADDING,
@@ -32,6 +34,35 @@ from scripts.utils.file_handler import FileHandler
 from scripts.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+def _find_available_font() -> str:
+    """
+    システムで利用可能な日本語フォントを検索
+
+    Returns:
+        利用可能なフォント名（見つからない場合はデフォルト）
+    """
+    try:
+        from matplotlib import font_manager
+
+        # システムフォントを取得
+        system_fonts = {f.name for f in font_manager.fontManager.ttflist}
+
+        for font in JAPANESE_FONTS:
+            # ハイフンをスペースに変換して検索
+            font_name = font.replace("-", " ")
+            if font_name in system_fonts or font in system_fonts:
+                logger.debug(f"利用可能なフォントを検出: {font}")
+                return font
+
+    except ImportError:
+        logger.debug("matplotlibが利用不可、デフォルトフォントを使用")
+    except Exception as e:
+        logger.debug(f"フォント検索エラー: {e}")
+
+    logger.debug(f"デフォルトフォントを使用: {DEFAULT_SUBTITLE_FONT}")
+    return DEFAULT_SUBTITLE_FONT
 
 
 class ClipManager:
@@ -74,17 +105,21 @@ class VideoComposer:
         width: int | None = None,
         height: int | None = None,
         fps: int | None = None,
+        font: str | None = None,
     ):
         """
         Args:
             width: 動画の幅
             height: 動画の高さ
             fps: フレームレート
+            font: 字幕用フォント名
         """
         self.width = width or config.VIDEO_WIDTH
         self.height = height or config.VIDEO_HEIGHT
         self.fps = fps or config.VIDEO_FPS
+        self.font = font or _find_available_font()
         self.subtitle_generator = SubtitleGenerator()
+        logger.info(f"VideoComposer初期化: {self.width}x{self.height}@{self.fps}fps, font={self.font}")
 
     def _create_image_clip(
         self,
@@ -145,6 +180,7 @@ class VideoComposer:
         """字幕クリップを作成"""
         clip = TextClip(
             text=text,
+            font=self.font,
             font_size=fontsize,
             color=color,
             stroke_color=stroke_color,

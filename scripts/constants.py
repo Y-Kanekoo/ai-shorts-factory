@@ -33,6 +33,25 @@ SUBTITLE_FONT_SIZE = 48
 SUBTITLE_PADDING = 100
 SUBTITLE_STROKE_WIDTH = 3
 
+# 日本語フォント設定（優先順位順）
+JAPANESE_FONTS = [
+    # Linux (Alpine / Docker)
+    "Noto-Sans-CJK-JP",
+    "NotoSansCJK-Regular",
+    # macOS
+    "Hiragino-Sans-GB",
+    "Hiragino-Kaku-Gothic-ProN",
+    "YuGothic",
+    # Windows
+    "Yu-Gothic",
+    "MS-Gothic",
+    "Meiryo",
+    # フォールバック
+    "DejaVu-Sans",
+    "Arial",
+]
+DEFAULT_SUBTITLE_FONT = "Noto-Sans-CJK-JP"
+
 
 # === 画像関連 ===
 

@@ -2,9 +2,11 @@
 # n8n + PostgreSQL構成
 
 services:
-  # n8n ワークフロー自動化ツール
+  # n8n ワークフロー自動化ツール（Python統合カスタムイメージ）
   n8n:
-    image: docker.n8n.io/n8nio/n8n:latest
+    build:
+      context: .
+      dockerfile: n8n/Dockerfile
     container_name: ai-shorts-n8n
     restart: unless-stopped
     ports:
@@ -20,6 +22,12 @@ services:
       - WEBHOOK_URL=${WEBHOOK_URL:-http://localhost:5678/}
       - GENERIC_TIMEZONE=Asia/Tokyo
       - TZ=Asia/Tokyo
+      # Python環境
+      - PYTHONPATH=/home/node
+      # API設定（Pythonスクリプト用）
+      - HUGGINGFACE_API_TOKEN=${HUGGINGFACE_API_TOKEN:-}
+      - PEXELS_API_KEY=${PEXELS_API_KEY:-}
+      - VOICEVOX_BASE_URL=${VOICEVOX_BASE_URL:-http://host.docker.internal:50021}
       # データベース接続
       - DB_TYPE=postgresdb
       - DB_POSTGRESDB_HOST=postgres
@@ -29,8 +37,8 @@ services:
       - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD:-n8n_password}
     volumes:
       - n8n_data:/home/node/.n8n
-      - ./scripts:/home/node/scripts:ro
       - ./output:/home/node/output
+      - ./templates:/home/node/templates:ro
     depends_on:
       postgres:
         condition: service_healthy
