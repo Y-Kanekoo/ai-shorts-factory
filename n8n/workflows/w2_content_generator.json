@@ -1,0 +1,171 @@
+{
+  "name": "W2: Content Generator（コンテンツ生成）",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "webhook-trigger",
+      "name": "Webhook受信",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [250, 300],
+      "webhookId": "w2-content-generator"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 台本データから音声生成用データを準備\nconst scriptData = $input.first().json;\nconst narrations = scriptData.narration || [];\n\nreturn narrations.map((item, index) => ({\n  index: index,\n  text: item.text,\n  image_prompt: item.image_prompt,\n  expected_duration: item.duration\n}));"
+      },
+      "id": "prepare-narrations",
+      "name": "ナレーション準備",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.VOICEVOX_BASE_URL }}/audio_query?text={{ encodeURIComponent($json.text) }}&speaker={{ $env.VOICEVOX_SPEAKER_ID }}",
+        "options": {}
+      },
+      "id": "voicevox-query",
+      "name": "VOICEVOX Query",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [650, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.VOICEVOX_BASE_URL }}/synthesis?speaker={{ $env.VOICEVOX_SPEAKER_ID }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "voicevox-synthesis",
+      "name": "VOICEVOX Synthesis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [850, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://black-forest-labs-flux-1-schnell.hf.space/api/predict",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ data: [$json.image_prompt, 0, true, 1024, 1024, 4] }) }}",
+        "options": {}
+      },
+      "id": "flux-generate",
+      "name": "FLUX.1 画像生成",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [650, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 音声と画像の結果を統合\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  results.push({\n    index: item.json.index,\n    text: item.json.text,\n    audio_path: item.json.audio_path,\n    image_path: item.json.image_path,\n    duration: item.json.duration\n  });\n}\n\nreturn { files: results };"
+      },
+      "id": "merge-results",
+      "name": "結果統合",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $env.W3_WORKFLOW_ID }}",
+        "options": {}
+      },
+      "id": "trigger-w3",
+      "name": "W3トリガー",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1250, 300]
+    }
+  ],
+  "connections": {
+    "Webhook受信": {
+      "main": [
+        [
+          {
+            "node": "ナレーション準備",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ナレーション準備": {
+      "main": [
+        [
+          {
+            "node": "VOICEVOX Query",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "FLUX.1 画像生成",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VOICEVOX Query": {
+      "main": [
+        [
+          {
+            "node": "VOICEVOX Synthesis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VOICEVOX Synthesis": {
+      "main": [
+        [
+          {
+            "node": "結果統合",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FLUX.1 画像生成": {
+      "main": [
+        [
+          {
+            "node": "結果統合",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "結果統合": {
+      "main": [
+        [
+          {
+            "node": "W3トリガー",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "timezone": "Asia/Tokyo"
+  },
+  "tags": ["ai-shorts-factory", "content-generator"],
+  "active": false
+}

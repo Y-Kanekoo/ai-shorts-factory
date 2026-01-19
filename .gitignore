@@ -1,0 +1,113 @@
+# AI Shorts Factory - Git除外設定
+
+# === 環境変数・機密情報 ===
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+client_secrets.json
+youtube_token.json
+*_credentials.json
+*_token.json
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# === 仮想環境 ===
+.venv/
+venv/
+ENV/
+env/
+.conda/
+
+# === テスト・カバレッジ ===
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+pytest_cache/
+
+# === 型チェック ===
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# === IDE ===
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# === macOS ===
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# === Windows ===
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# === 出力ファイル ===
+output/scripts/*.json
+output/audio/*.wav
+output/audio/*.mp3
+output/images/*.png
+output/images/*.jpg
+output/videos/*.mp4
+output/temp/*
+
+# === ログ ===
+*.log
+logs/
+
+# === Docker ===
+.docker/
+
+# === n8n ===
+n8n_data/
+
+# === Jupyter Notebook ===
+.ipynb_checkpoints/
+*.ipynb
+
+# === 一時ファイル ===
+*.tmp
+*.temp
+*.bak

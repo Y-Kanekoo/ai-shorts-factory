@@ -1,0 +1,114 @@
+{
+  "name": "W4: Publisher（YouTube投稿）",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "webhook-trigger",
+      "name": "Webhook受信",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [250, 300],
+      "webhookId": "w4-publisher"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 投稿用データを準備\nconst input = $input.first().json;\n\n// Shorts用の調整\nlet description = input.description || '';\nif (!description.includes('#Shorts')) {\n  description += '\\n\\n#Shorts';\n}\n\nreturn {\n  video_path: input.video_path,\n  title: input.title,\n  description: description,\n  tags: [...(input.tags || []), 'Shorts'],\n  privacy_status: input.privacy_status || 'private'\n};"
+      },
+      "id": "prepare-upload",
+      "name": "アップロード準備",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "command": "python3 /home/node/scripts/publish_video.py --video {{ $json.video_path }} --title \"{{ $json.title }}\" --description \"{{ $json.description }}\" --tags {{ $json.tags.join(' ') }} --privacy {{ $json.privacy_status }}"
+      },
+      "id": "upload-video",
+      "name": "YouTube投稿（Python）",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 投稿結果を解析\nconst stdout = $input.first().json.stdout;\nconst stderr = $input.first().json.stderr;\n\nif (stderr) {\n  console.log('Warning:', stderr);\n}\n\n// 動画IDとURLを抽出\nconst videoIdMatch = stdout.match(/Video ID: ([\\w-]+)/);\nconst urlMatch = stdout.match(/URL: (https:\\/\\/[^\\s]+)/);\n\nif (!videoIdMatch) {\n  throw new Error('投稿に失敗しました: ' + stdout);\n}\n\nreturn {\n  video_id: videoIdMatch[1],\n  video_url: urlMatch ? urlMatch[1] : `https://www.youtube.com/watch?v=${videoIdMatch[1]}`,\n  shorts_url: `https://www.youtube.com/shorts/${videoIdMatch[1]}`,\n  success: true\n};"
+      },
+      "id": "parse-result",
+      "name": "結果解析",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "channel": "={{ $env.SLACK_CHANNEL }}",
+        "text": "🎬 新しいShorts動画を投稿しました！\n\nタイトル: {{ $json.title }}\nURL: {{ $json.shorts_url }}",
+        "otherOptions": {}
+      },
+      "id": "slack-notify",
+      "name": "Slack通知",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [1050, 300],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-cred",
+          "name": "Slack API"
+        }
+      },
+      "disabled": true
+    }
+  ],
+  "connections": {
+    "Webhook受信": {
+      "main": [
+        [
+          {
+            "node": "アップロード準備",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "アップロード準備": {
+      "main": [
+        [
+          {
+            "node": "YouTube投稿（Python）",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YouTube投稿（Python）": {
+      "main": [
+        [
+          {
+            "node": "結果解析",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "結果解析": {
+      "main": [
+        [
+          {
+            "node": "Slack通知",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "timezone": "Asia/Tokyo"
+  },
+  "tags": ["ai-shorts-factory", "publisher"],
+  "active": false
+}

@@ -1,0 +1,130 @@
+{
+  "name": "W3: Video Composer（動画合成）",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "webhook-trigger",
+      "name": "Webhook受信",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [250, 300],
+      "webhookId": "w3-video-composer"
+    },
+    {
+      "parameters": {
+        "command": "python3 /home/node/scripts/compose_video.py --audio-metadata {{ $json.audio_metadata_path }} --image-metadata {{ $json.image_metadata_path }} --output /home/node/output/videos/{{ $json.video_filename }}"
+      },
+      "id": "compose-video",
+      "name": "動画合成（Python）",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 合成結果を解析\nconst stdout = $input.first().json.stdout;\nconst stderr = $input.first().json.stderr;\n\nif (stderr && !stderr.includes('UserWarning')) {\n  throw new Error(`動画合成エラー: ${stderr}`);\n}\n\n// 出力パスを取得\nconst videoPath = `/home/node/output/videos/${$('Webhook受信').first().json.video_filename}`;\n\nreturn {\n  video_path: videoPath,\n  success: true\n};"
+      },
+      "id": "parse-result",
+      "name": "結果解析",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.success }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-success",
+      "name": "成功確認",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $env.W4_WORKFLOW_ID }}",
+        "options": {}
+      },
+      "id": "trigger-w4",
+      "name": "W4トリガー",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1050, 200]
+    },
+    {
+      "parameters": {
+        "errorMessage": "動画合成に失敗しました"
+      },
+      "id": "error-handler",
+      "name": "エラー処理",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [1050, 400]
+    }
+  ],
+  "connections": {
+    "Webhook受信": {
+      "main": [
+        [
+          {
+            "node": "動画合成（Python）",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "動画合成（Python）": {
+      "main": [
+        [
+          {
+            "node": "結果解析",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "結果解析": {
+      "main": [
+        [
+          {
+            "node": "成功確認",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "成功確認": {
+      "main": [
+        [
+          {
+            "node": "W4トリガー",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "エラー処理",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "timezone": "Asia/Tokyo"
+  },
+  "tags": ["ai-shorts-factory", "video-composer"],
+  "active": false
+}

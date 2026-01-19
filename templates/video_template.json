@@ -1,0 +1,107 @@
+{
+  "name": "default_shorts_template",
+  "description": "YouTube Shorts / TikTok用のデフォルトテンプレート",
+  "settings": {
+    "resolution": {
+      "width": 1080,
+      "height": 1920
+    },
+    "fps": 30,
+    "duration_range": {
+      "min": 15,
+      "max": 60
+    }
+  },
+  "layers": {
+    "background": {
+      "type": "video_or_image",
+      "position": "center",
+      "fit": "cover",
+      "effects": [
+        {
+          "name": "blur",
+          "intensity": 0.3,
+          "enabled": false
+        },
+        {
+          "name": "darken",
+          "intensity": 0.2,
+          "enabled": true
+        }
+      ]
+    },
+    "main_visual": {
+      "type": "image",
+      "position": "center",
+      "size": {
+        "width": 900,
+        "height": 900
+      },
+      "animation": {
+        "type": "zoom_in",
+        "duration": 3,
+        "scale": 1.1
+      }
+    },
+    "subtitles": {
+      "enabled": true,
+      "position": "bottom",
+      "margin_bottom": 200,
+      "style": {
+        "font_family": "Noto Sans JP",
+        "font_size": 48,
+        "font_weight": "bold",
+        "color": "#FFFFFF",
+        "stroke_color": "#000000",
+        "stroke_width": 3,
+        "background": {
+          "enabled": true,
+          "color": "#000000",
+          "opacity": 0.5,
+          "padding": 10,
+          "border_radius": 8
+        }
+      },
+      "animation": {
+        "type": "fade_in",
+        "duration": 0.2
+      }
+    },
+    "hook_text": {
+      "enabled": true,
+      "position": "top",
+      "margin_top": 150,
+      "style": {
+        "font_family": "Noto Sans JP",
+        "font_size": 56,
+        "font_weight": "black",
+        "color": "#FFFF00",
+        "stroke_color": "#FF0000",
+        "stroke_width": 4
+      },
+      "animation": {
+        "type": "bounce_in",
+        "duration": 0.5
+      }
+    }
+  },
+  "transitions": {
+    "default": {
+      "type": "crossfade",
+      "duration": 0.3
+    }
+  },
+  "audio": {
+    "narration": {
+      "volume": 1.0,
+      "fade_in": 0.1,
+      "fade_out": 0.1
+    },
+    "bgm": {
+      "enabled": false,
+      "volume": 0.2,
+      "fade_in": 1.0,
+      "fade_out": 1.0
+    }
+  }
+}

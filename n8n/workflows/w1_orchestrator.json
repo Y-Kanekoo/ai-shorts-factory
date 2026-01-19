@@ -1,0 +1,150 @@
+{
+  "name": "W1: Orchestrator（オーケストレーター）",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "定期実行トリガー",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api-inference.huggingface.co/models/Qwen/Qwen2.5-72B-Instruct",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ inputs: $json.prompt, parameters: { max_new_tokens: 2048, temperature: 0.7 } }) }}",
+        "options": {}
+      },
+      "id": "hf-inference",
+      "name": "台本生成（HF）",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [650, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "hf-auth",
+          "name": "HuggingFace API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// テーマとキーワードを設定\nconst themes = [\n  { theme: '日本の雑学', keywords: ['日本', '文化', '豆知識'] },\n  { theme: '猫の不思議', keywords: ['猫', '動物', '生態'] },\n  { theme: '宇宙の神秘', keywords: ['宇宙', '科学', '惑星'] },\n];\n\n// ランダムに選択\nconst selected = themes[Math.floor(Math.random() * themes.length)];\n\n// プロンプトを構築\nconst prompt = `\nあなたはYouTube Shorts向けの台本を作成するエキスパートです。\n\nテーマ: ${selected.theme}\nキーワード: ${selected.keywords.join(', ')}\n動画の長さ: 約30秒\n\n以下のJSON形式で台本を作成してください：\n{\n  \"title\": \"動画タイトル（15文字以内）\",\n  \"hook\": \"最初の掴み（10文字以内）\",\n  \"narration\": [\n    {\"text\": \"ナレーション\", \"duration\": 秒数, \"image_prompt\": \"英語の画像プロンプト\"}\n  ],\n  \"tags\": [\"タグ1\", \"タグ2\"],\n  \"description\": \"説明文\"\n}\n`;\n\nreturn {\n  theme: selected.theme,\n  keywords: selected.keywords,\n  prompt: prompt\n};"
+      },
+      "id": "prepare-prompt",
+      "name": "プロンプト準備",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// LLM応答からJSONを抽出\nconst response = $input.first().json;\n\n// 応答テキストを取得\nlet text = '';\nif (Array.isArray(response)) {\n  text = response[0]?.generated_text || '';\n} else {\n  text = response.generated_text || JSON.stringify(response);\n}\n\n// JSONを抽出\nconst jsonMatch = text.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\nlet scriptData;\n\nif (jsonMatch) {\n  scriptData = JSON.parse(jsonMatch[1].trim());\n} else {\n  // コードブロックがない場合\n  const jsonStart = text.indexOf('{');\n  const jsonEnd = text.lastIndexOf('}') + 1;\n  scriptData = JSON.parse(text.slice(jsonStart, jsonEnd));\n}\n\n// メタデータを追加\nscriptData.metadata = {\n  theme: $('プロンプト準備').first().json.theme,\n  keywords: $('プロンプト準備').first().json.keywords,\n  generated_at: new Date().toISOString()\n};\n\nreturn scriptData;"
+      },
+      "id": "parse-script",
+      "name": "台本解析",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "operation": "toJson",
+        "options": {}
+      },
+      "id": "save-script",
+      "name": "台本保存",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $env.W2_WORKFLOW_ID }}",
+        "options": {}
+      },
+      "id": "trigger-w2",
+      "name": "W2トリガー",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1250, 300]
+    }
+  ],
+  "connections": {
+    "定期実行トリガー": {
+      "main": [
+        [
+          {
+            "node": "プロンプト準備",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "プロンプト準備": {
+      "main": [
+        [
+          {
+            "node": "台本生成（HF）",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "台本生成（HF）": {
+      "main": [
+        [
+          {
+            "node": "台本解析",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "台本解析": {
+      "main": [
+        [
+          {
+            "node": "台本保存",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "台本保存": {
+      "main": [
+        [
+          {
+            "node": "W2トリガー",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "timezone": "Asia/Tokyo"
+  },
+  "staticData": null,
+  "tags": ["ai-shorts-factory", "orchestrator"],
+  "active": false
+}
