@@ -18,7 +18,12 @@ logger = get_logger(__name__)
 
 
 class VoiceGenerator:
-    """音声生成クラス"""
+    """
+    音声生成クラス
+
+    コネクションプールを再利用するため、async with文で使用するか、
+    手動でclose()を呼び出してリソースを解放してください。
+    """
 
     def __init__(self, voicevox_url: str | None = None):
         """
@@ -26,6 +31,23 @@ class VoiceGenerator:
             voicevox_url: VOICEVOX EngineのURL
         """
         self.client = VoicevoxClient(base_url=voicevox_url)
+
+    async def close(self) -> None:
+        """クライアントを閉じてリソースを解放"""
+        await self.client.close()
+
+    async def __aenter__(self) -> "VoiceGenerator":
+        """コンテキストマネージャーのエントリ"""
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: Any,
+    ) -> None:
+        """コンテキストマネージャーの終了"""
+        await self.close()
 
     async def check_voicevox_status(self) -> bool:
         """VOICEVOXの稼働状況を確認"""
@@ -186,13 +208,13 @@ async def main():
         pitch=args.pitch,
     )
 
-    # 音声を生成
-    generator = VoiceGenerator(voicevox_url=args.voicevox_url)
-    result = await generator.generate_and_save(
-        script_data=script_data,
-        settings=settings,
-        output_prefix=args.output,
-    )
+    # 音声を生成（async withでリソースを確実に解放）
+    async with VoiceGenerator(voicevox_url=args.voicevox_url) as generator:
+        result = await generator.generate_and_save(
+            script_data=script_data,
+            settings=settings,
+            output_prefix=args.output,
+        )
 
     print(f"音声ファイルを保存しました: {result['metadata_path']}")
     print(f"合計時間: {result['total_duration']:.2f}秒")

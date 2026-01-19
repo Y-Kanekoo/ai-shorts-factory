@@ -12,23 +12,33 @@
     },
     {
       "parameters": {
-        "command": "cd /home/node && python3 -m scripts.compose_video --audio-metadata {{ $json.audio_metadata_path }} --image-metadata {{ $json.image_metadata_path }} --output /home/node/output/videos/{{ $json.video_filename }}"
+        "jsCode": "// 入力パラメータをJSONファイルに書き出し\nconst fs = require('fs');\nconst input = $input.first().json;\n\n// 一意なファイル名を生成\nconst timestamp = Date.now();\nconst inputFile = `/home/node/output/temp/compose_input_${timestamp}.json`;\nconst outputFile = `/home/node/output/videos/video_${timestamp}.mp4`;\n\n// 入力データを整形\nconst params = {\n  audio_metadata_path: input.audio_metadata_path,\n  image_metadata_path: input.image_metadata_path,\n  output_path: outputFile,\n  background_path: input.background_path || null\n};\n\n// tempディレクトリを確保\nconst tempDir = '/home/node/output/temp';\nif (!fs.existsSync(tempDir)) {\n  fs.mkdirSync(tempDir, { recursive: true });\n}\n\n// JSONファイルに書き出し\nfs.writeFileSync(inputFile, JSON.stringify(params, null, 2));\n\nreturn {\n  input_file: inputFile,\n  output_file: outputFile\n};"
+      },
+      "id": "prepare-input",
+      "name": "入力準備",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "command": "cd /home/node && python3 -m scripts.compose_video --input-json {{ $json.input_file }}"
       },
       "id": "compose-video",
       "name": "動画合成（Python）",
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
-      "position": [450, 300]
+      "position": [650, 300]
     },
     {
       "parameters": {
-        "jsCode": "// 合成結果を解析\nconst stdout = $input.first().json.stdout;\nconst stderr = $input.first().json.stderr;\n\nif (stderr && !stderr.includes('UserWarning')) {\n  throw new Error(`動画合成エラー: ${stderr}`);\n}\n\n// 出力パスを取得\nconst videoPath = `/home/node/output/videos/${$('Webhook受信').first().json.video_filename}`;\n\nreturn {\n  video_path: videoPath,\n  success: true\n};"
+        "jsCode": "// 合成結果を解析\nconst fs = require('fs');\nconst stdout = $input.first().json.stdout;\nconst stderr = $input.first().json.stderr;\nconst inputFile = $('入力準備').first().json.input_file;\nconst outputFile = $('入力準備').first().json.output_file;\n\n// 警告以外のエラーをチェック\nif (stderr && !stderr.includes('UserWarning') && !stderr.includes('INFO')) {\n  // 致命的なエラーキーワードをチェック\n  if (stderr.includes('Error') || stderr.includes('Exception') || stderr.includes('Traceback')) {\n    throw new Error(`動画合成エラー: ${stderr.substring(0, 500)}`);\n  }\n}\n\n// 一時ファイルを削除\ntry {\n  if (fs.existsSync(inputFile)) {\n    fs.unlinkSync(inputFile);\n  }\n} catch (e) {\n  console.log('一時ファイル削除エラー（無視）:', e.message);\n}\n\n// 出力ファイルの存在確認\nif (!fs.existsSync(outputFile)) {\n  throw new Error(`出力ファイルが見つかりません: ${outputFile}`);\n}\n\nreturn {\n  video_path: outputFile,\n  success: true\n};"
       },
       "id": "parse-result",
       "name": "結果解析",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [650, 300]
+      "position": [850, 300]
     },
     {
       "parameters": {
@@ -45,7 +55,7 @@
       "name": "成功確認",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [850, 300]
+      "position": [1050, 300]
     },
     {
       "parameters": {
@@ -56,7 +66,7 @@
       "name": "W4トリガー",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1,
-      "position": [1050, 200]
+      "position": [1250, 200]
     },
     {
       "parameters": {
@@ -66,11 +76,22 @@
       "name": "エラー処理",
       "type": "n8n-nodes-base.stopAndError",
       "typeVersion": 1,
-      "position": [1050, 400]
+      "position": [1250, 400]
     }
   ],
   "connections": {
     "Webhook受信": {
+      "main": [
+        [
+          {
+            "node": "入力準備",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "入力準備": {
       "main": [
         [
           {

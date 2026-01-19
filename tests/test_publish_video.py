@@ -180,3 +180,66 @@ class TestVideoPublisher:
 
         assert result["video_id"] == "update123"
         assert result["updated"] is True
+
+    def test_validate_aspect_ratio_portrait(self, publisher, tmp_path):
+        """縦長動画のアスペクト比検証"""
+        video_path = tmp_path / "portrait.mp4"
+        video_path.write_bytes(b"fake_video")
+
+        # 1080x1920の縦長動画をシミュレート
+        with patch.object(publisher, "_get_video_metadata") as mock_meta:
+            mock_meta.return_value = {
+                "duration": 30,
+                "width": 1080,
+                "height": 1920,
+                "aspect_ratio": 1920 / 1080,  # ≈1.78
+                "fps": 30,
+            }
+
+            result = publisher._validate_for_shorts(video_path)
+
+        assert result["valid"] is True
+        # 縦長なので警告なし
+        assert not any("縦長動画ではありません" in w for w in result.get("warnings", []))
+
+    def test_validate_aspect_ratio_landscape(self, publisher, tmp_path):
+        """横長動画のアスペクト比検証（警告）"""
+        video_path = tmp_path / "landscape.mp4"
+        video_path.write_bytes(b"fake_video")
+
+        # 1920x1080の横長動画をシミュレート
+        with patch.object(publisher, "_get_video_metadata") as mock_meta:
+            mock_meta.return_value = {
+                "duration": 30,
+                "width": 1920,
+                "height": 1080,
+                "aspect_ratio": 1080 / 1920,  # ≈0.56
+                "fps": 30,
+            }
+
+            result = publisher._validate_for_shorts(video_path)
+
+        # エラーではなく警告
+        assert result["valid"] is True
+        assert any("縦長動画ではありません" in w for w in result.get("warnings", []))
+
+    def test_validate_aspect_ratio_square(self, publisher, tmp_path):
+        """正方形動画のアスペクト比検証（警告）"""
+        video_path = tmp_path / "square.mp4"
+        video_path.write_bytes(b"fake_video")
+
+        # 1080x1080の正方形動画をシミュレート
+        with patch.object(publisher, "_get_video_metadata") as mock_meta:
+            mock_meta.return_value = {
+                "duration": 30,
+                "width": 1080,
+                "height": 1080,
+                "aspect_ratio": 1.0,
+                "fps": 30,
+            }
+
+            result = publisher._validate_for_shorts(video_path)
+
+        # エラーではなく警告
+        assert result["valid"] is True
+        assert any("縦長動画ではありません" in w for w in result.get("warnings", []))

@@ -1,5 +1,12 @@
 # AI Shorts Factory - Docker Compose設定
 # n8n + PostgreSQL構成
+#
+# ⚠️ セキュリティ注意事項:
+# 本番環境では必ず.envファイルで以下の環境変数を設定してください:
+# - N8N_BASIC_AUTH_PASSWORD: 強力なパスワードに変更必須
+# - POSTGRES_PASSWORD: 強力なパスワードに変更必須
+# - HUGGINGFACE_API_TOKEN: APIトークン設定必須
+# - PEXELS_API_KEY: APIキー設定必須
 
 services:
   # n8n ワークフロー自動化ツール（Python統合カスタムイメージ）
@@ -14,7 +21,8 @@ services:
     environment:
       - N8N_BASIC_AUTH_ACTIVE=true
       - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER:-admin}
-      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD:-password}
+      # ⚠️ 本番環境では必ず変更してください
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD:?N8N_BASIC_AUTH_PASSWORD is required}
       - N8N_HOST=${N8N_HOST:-localhost}
       - N8N_PORT=5678
       - N8N_PROTOCOL=http
@@ -53,7 +61,8 @@ services:
     environment:
       - POSTGRES_DB=${POSTGRES_DB:-n8n}
       - POSTGRES_USER=${POSTGRES_USER:-n8n}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-n8n_password}
+      # ⚠️ 本番環境では必ず変更してください
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       - TZ=Asia/Tokyo
     volumes:
       - postgres_data:/var/lib/postgresql/data

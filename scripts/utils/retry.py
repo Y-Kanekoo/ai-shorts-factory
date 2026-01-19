@@ -40,15 +40,21 @@ RETRYABLE_NETWORK_EXCEPTIONS = (
 )
 
 # Hugging Face / Gradio関連の例外名（動的チェック用）
-HF_RETRYABLE_EXCEPTION_NAMES = {
-    "HfHubHTTPError",  # huggingface_hub
-    "RepositoryNotFoundError",  # huggingface_hub
-    "GatedRepoError",  # huggingface_hub
+# 注意: HfHubHTTPErrorはステータスコードでリトライ判定するため除外
+HF_TRANSIENT_EXCEPTION_NAMES = {
+    # 一時的なエラーのみリトライ対象（認証エラー等は除外）
+}
+
+# 永続的エラー（リトライしない）
+HF_PERMANENT_EXCEPTION_NAMES = {
+    "RepositoryNotFoundError",  # リポジトリが存在しない
+    "GatedRepoError",  # アクセス権限がない
+    "EntryNotFoundError",  # ファイルが存在しない
 }
 
 GRADIO_RETRYABLE_EXCEPTION_NAMES = {
-    "AppError",  # gradio_client
-    "QueueError",  # gradio_client
+    "AppError",  # gradio_client - Spaceの一時的エラー
+    "QueueError",  # gradio_client - キュー関連エラー
 }
 
 # HTTPステータスコードでリトライ対象
@@ -76,8 +82,21 @@ def _is_hf_or_gradio_retryable(exception: BaseException) -> bool:
     Hugging FaceまたはGradioの例外がリトライ対象かどうかを判定
 
     インポートなしで例外名でチェック（オプション依存対応）
+
+    リトライ対象:
+    - HfHubHTTPError: 429, 5xxのみ
+    - Gradio: AppError, QueueError
+
+    リトライ対象外:
+    - HfHubHTTPError: 401, 403, 404など永続的エラー
+    - RepositoryNotFoundError, GatedRepoError等
     """
     exception_name = type(exception).__name__
+
+    # 永続的なエラーはリトライしない
+    if exception_name in HF_PERMANENT_EXCEPTION_NAMES:
+        logger.debug(f"永続的エラーのためリトライ対象外: {exception_name}")
+        return False
 
     # HfHubHTTPErrorの場合、ステータスコードをチェック
     if exception_name == "HfHubHTTPError":
@@ -88,13 +107,22 @@ def _is_hf_or_gradio_retryable(exception: BaseException) -> bool:
         if status_code is None:
             # 直接status_code属性を確認
             status_code = getattr(exception, "status_code", None)
-        if status_code and status_code in RETRYABLE_STATUS_CODES:
-            return True
-        # ステータスコードが取得できない場合もリトライ対象
-        return True
 
-    # その他のHugging Face例外
-    if exception_name in HF_RETRYABLE_EXCEPTION_NAMES:
+        # ステータスコードが取得できた場合、429/5xxのみリトライ
+        if status_code is not None:
+            if status_code in RETRYABLE_STATUS_CODES:
+                logger.debug(f"HfHubHTTPError({status_code})はリトライ対象")
+                return True
+            else:
+                logger.debug(f"HfHubHTTPError({status_code})はリトライ対象外")
+                return False
+
+        # ステータスコードが取得できない場合はリトライしない（安全策）
+        logger.debug("HfHubHTTPErrorのステータスコードが不明、リトライ対象外")
+        return False
+
+    # 一時的なHF例外
+    if exception_name in HF_TRANSIENT_EXCEPTION_NAMES:
         return True
 
     # Gradio例外

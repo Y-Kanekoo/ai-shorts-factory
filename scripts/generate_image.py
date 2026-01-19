@@ -116,7 +116,7 @@ class ImageGenerator:
         num_inference_steps: int,
     ) -> str:
         """FLUX.1 APIを呼び出し（リトライ付き）"""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         client = self._get_client()
 
         try:
