@@ -130,6 +130,95 @@ class MediaFetcher:
 
         return videos
 
+    def _calculate_video_score(
+        self,
+        video: dict[str, Any],
+        video_file: dict[str, Any],
+    ) -> float:
+        """
+        動画のスコアを計算（高いほど良い）
+
+        Args:
+            video: 動画情報
+            video_file: 動画ファイル情報
+
+        Returns:
+            スコア（0-100）
+        """
+        score = 0.0
+        width = video_file.get("width", 0)
+        height = video_file.get("height", 0)
+        quality = video_file.get("quality", "")
+        duration = video.get("duration", 0)
+
+        # 縦長ボーナス（最重要）: +40点
+        if height > width:
+            score += 40.0
+            # 9:16に近いほど追加ボーナス（最大+10点）
+            aspect_ratio = height / width if width > 0 else 0
+            target_ratio = 16 / 9
+            ratio_diff = abs(aspect_ratio - target_ratio)
+            score += max(0, 10 - ratio_diff * 5)
+
+        # 品質ボーナス: HD=+20点, SD=+10点
+        if quality == "hd":
+            score += 20.0
+        elif quality == "sd":
+            score += 10.0
+
+        # 解像度ボーナス（最大+15点）
+        if height >= 1080:
+            score += 15.0
+        elif height >= 720:
+            score += 10.0
+        elif height >= 480:
+            score += 5.0
+
+        # 長さボーナス（15-60秒が理想）: 最大+15点
+        if 15 <= duration <= 60:
+            score += 15.0
+        elif 10 <= duration <= 90:
+            score += 10.0
+        elif 5 <= duration <= 120:
+            score += 5.0
+
+        return score
+
+    def _select_best_video(
+        self,
+        videos: list[dict[str, Any]],
+    ) -> tuple[dict[str, Any], dict[str, Any]] | None:
+        """
+        検索結果から最適な動画とファイルを選択
+
+        Args:
+            videos: 動画情報のリスト
+
+        Returns:
+            (最適な動画, 最適なファイル) のタプル、見つからない場合はNone
+        """
+        if not videos:
+            return None
+
+        best_video = None
+        best_file = None
+        best_score = -1.0
+
+        for video in videos:
+            video_files = video.get("video_files", [])
+            for vf in video_files:
+                score = self._calculate_video_score(video, vf)
+                if score > best_score:
+                    best_score = score
+                    best_video = video
+                    best_file = vf
+
+        if best_video and best_file:
+            logger.debug(f"最適な動画を選択: スコア={best_score:.1f}")
+            return best_video, best_file
+
+        return None
+
     def _select_best_video_file(
         self,
         video_files: list[dict[str, Any]],
@@ -137,7 +226,7 @@ class MediaFetcher:
         target_height: int = 1920,
     ) -> dict[str, Any] | None:
         """
-        最適な動画ファイルを選択
+        最適な動画ファイルを選択（後方互換性のため維持）
 
         Args:
             video_files: 動画ファイル情報のリスト
@@ -219,13 +308,12 @@ class MediaFetcher:
         if not videos:
             raise ValueError(f"動画が見つかりませんでした: {query}")
 
-        # 最初の動画を選択
-        video = videos[0]
-        video_files = video.get("video_files", [])
-        best_file = self._select_best_video_file(video_files)
-
-        if not best_file:
+        # 検索結果全体から最適な動画を選択（スコアリング）
+        result = self._select_best_video(videos)
+        if result is None:
             raise ValueError("適切な動画ファイルが見つかりませんでした")
+
+        video, best_file = result
 
         # 出力パスを決定
         if output_path is None:
@@ -342,32 +430,32 @@ async def main():
 
     args = parser.parse_args()
 
-    fetcher = MediaFetcher()
-
-    if args.query:
-        # 単一検索
-        result = await fetcher.fetch_video(
-            query=args.query,
-            output_path=Path(args.output) if args.output else None,
-        )
-        print(f"動画を保存しました: {result['filepath']}")
-    elif args.queries:
-        # 複数検索
-        result = await fetcher.fetch_multiple_videos(
-            queries=args.queries,
-            output_prefix=args.output,
-        )
-        print(f"メタデータを保存しました: {result['metadata_path']}")
-    elif args.script:
-        # 台本から検索
-        script_data = FileHandler.load_json(Path(args.script))
-        result = await fetcher.fetch_from_script(
-            script_data=script_data,
-            output_prefix=args.output,
-        )
-        print(f"メタデータを保存しました: {result['metadata_path']}")
-    else:
-        parser.error("--query, --queries, または --script が必要です")
+    # async withでリソースを確実に解放
+    async with MediaFetcher() as fetcher:
+        if args.query:
+            # 単一検索
+            result = await fetcher.fetch_video(
+                query=args.query,
+                output_path=Path(args.output) if args.output else None,
+            )
+            print(f"動画を保存しました: {result['filepath']}")
+        elif args.queries:
+            # 複数検索
+            result = await fetcher.fetch_multiple_videos(
+                queries=args.queries,
+                output_prefix=args.output,
+            )
+            print(f"メタデータを保存しました: {result['metadata_path']}")
+        elif args.script:
+            # 台本から検索
+            script_data = FileHandler.load_json(Path(args.script))
+            result = await fetcher.fetch_from_script(
+                script_data=script_data,
+                output_prefix=args.output,
+            )
+            print(f"メタデータを保存しました: {result['metadata_path']}")
+        else:
+            parser.error("--query, --queries, または --script が必要です")
 
 
 if __name__ == "__main__":

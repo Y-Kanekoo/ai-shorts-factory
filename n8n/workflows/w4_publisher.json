@@ -12,7 +12,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// 投稿用データを準備\nconst input = $input.first().json;\n\n// Shorts用の調整\nlet description = input.description || '';\nif (!description.includes('#Shorts')) {\n  description += '\\n\\n#Shorts';\n}\n\nreturn {\n  video_path: input.video_path,\n  title: input.title,\n  description: description,\n  tags: [...(input.tags || []), 'Shorts'],\n  privacy_status: input.privacy_status || 'private'\n};"
+        "jsCode": "// 投稿用データをJSONファイルに書き出し\nconst fs = require('fs');\nconst input = $input.first().json;\n\n// 一意なファイル名を生成\nconst timestamp = Date.now();\nconst inputFile = `/home/node/output/temp/publish_input_${timestamp}.json`;\n\n// Shorts用の調整\nlet description = input.description || '';\nif (!description.includes('#Shorts')) {\n  description += '\\n\\n#Shorts';\n}\n\n// 入力データを整形\nconst params = {\n  video_path: input.video_path,\n  title: input.title,\n  description: description,\n  tags: [...(input.tags || []), 'Shorts'],\n  privacy_status: input.privacy_status || 'private'\n};\n\n// tempディレクトリを確保\nconst tempDir = '/home/node/output/temp';\nif (!fs.existsSync(tempDir)) {\n  fs.mkdirSync(tempDir, { recursive: true });\n}\n\n// JSONファイルに書き出し\nfs.writeFileSync(inputFile, JSON.stringify(params, null, 2));\n\nreturn {\n  input_file: inputFile,\n  title: params.title\n};"
       },
       "id": "prepare-upload",
       "name": "アップロード準備",
@@ -22,7 +22,7 @@
     },
     {
       "parameters": {
-        "command": "cd /home/node && python3 -m scripts.publish_video --video {{ $json.video_path }} --title \"{{ $json.title }}\" --description \"{{ $json.description }}\" --tags {{ $json.tags.join(' ') }} --privacy {{ $json.privacy_status }}"
+        "command": "cd /home/node && python3 -m scripts.publish_video --input-json {{ $json.input_file }}"
       },
       "id": "upload-video",
       "name": "YouTube投稿（Python）",
@@ -32,7 +32,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// 投稿結果を解析\nconst stdout = $input.first().json.stdout;\nconst stderr = $input.first().json.stderr;\n\nif (stderr) {\n  console.log('Warning:', stderr);\n}\n\n// 動画IDとURLを抽出\nconst videoIdMatch = stdout.match(/Video ID: ([\\w-]+)/);\nconst urlMatch = stdout.match(/URL: (https:\\/\\/[^\\s]+)/);\n\nif (!videoIdMatch) {\n  throw new Error('投稿に失敗しました: ' + stdout);\n}\n\nreturn {\n  video_id: videoIdMatch[1],\n  video_url: urlMatch ? urlMatch[1] : `https://www.youtube.com/watch?v=${videoIdMatch[1]}`,\n  shorts_url: `https://www.youtube.com/shorts/${videoIdMatch[1]}`,\n  success: true\n};"
+        "jsCode": "// 投稿結果を解析\nconst fs = require('fs');\nconst stdout = $input.first().json.stdout;\nconst stderr = $input.first().json.stderr;\nconst inputFile = $('アップロード準備').first().json.input_file;\nconst title = $('アップロード準備').first().json.title;\n\nif (stderr && stderr.includes('Error')) {\n  console.log('Warning:', stderr);\n}\n\n// 一時ファイルを削除\ntry {\n  if (fs.existsSync(inputFile)) {\n    fs.unlinkSync(inputFile);\n  }\n} catch (e) {\n  console.log('一時ファイル削除エラー（無視）:', e.message);\n}\n\n// 動画IDとURLを抽出\nconst videoIdMatch = stdout.match(/Video ID: ([\\w-]+)/);\nconst urlMatch = stdout.match(/URL: (https:\\/\\/[^\\s]+)/);\n\nif (!videoIdMatch) {\n  throw new Error('投稿に失敗しました: ' + stdout);\n}\n\nreturn {\n  video_id: videoIdMatch[1],\n  video_url: urlMatch ? urlMatch[1] : `https://www.youtube.com/watch?v=${videoIdMatch[1]}`,\n  shorts_url: `https://www.youtube.com/shorts/${videoIdMatch[1]}`,\n  title: title,\n  success: true\n};"
       },
       "id": "parse-result",
       "name": "結果解析",

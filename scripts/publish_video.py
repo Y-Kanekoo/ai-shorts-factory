@@ -72,6 +72,7 @@ class VideoPublisher:
                     "duration": clip.duration,
                     "width": clip.size[0],
                     "height": clip.size[1],
+                    # アスペクト比: height/widthで計算（縦長なら1より大きい）
                     "aspect_ratio": clip.size[1] / clip.size[0] if clip.size[0] > 0 else 0,
                     "fps": clip.fps,
                 }
@@ -221,7 +222,7 @@ class VideoPublisher:
         )
 
         # 別スレッドで実行（ブロッキング操作）
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         def do_upload():
             request = youtube.videos().insert(
@@ -311,7 +312,7 @@ class VideoPublisher:
         youtube = self.auth.get_service()
 
         # 現在の情報を取得
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         def get_video():
             return (
@@ -366,7 +367,7 @@ class VideoPublisher:
 async def main():
     """CLI実行用"""
     parser = argparse.ArgumentParser(description="YouTubeに動画をアップロード")
-    parser.add_argument("--video", "-v", required=True, help="動画ファイルのパス")
+    parser.add_argument("--video", "-v", help="動画ファイルのパス")
     parser.add_argument("--title", "-t", help="動画タイトル")
     parser.add_argument("--description", "-d", help="動画の説明")
     parser.add_argument("--tags", nargs="+", help="タグ")
@@ -378,8 +379,21 @@ async def main():
         help="公開設定",
     )
     parser.add_argument("--auth", action="store_true", help="認証のみ実行")
+    parser.add_argument("--input-json", help="入力パラメータJSONファイルのパス（n8n連携用）")
 
     args = parser.parse_args()
+
+    # JSONファイルからパラメータを読み込み（n8n連携用）
+    if args.input_json:
+        import json
+
+        with open(args.input_json, encoding="utf-8") as f:
+            params = json.load(f)
+        args.video = params.get("video_path")
+        args.title = params.get("title")
+        args.description = params.get("description")
+        args.tags = params.get("tags")
+        args.privacy = params.get("privacy_status", "private")
 
     publisher = VideoPublisher()
 
@@ -388,6 +402,9 @@ async def main():
         publisher.auth.authenticate(force_reauth=True)
         print("認証が完了しました")
         return
+
+    if not args.video:
+        parser.error("--video または --input-json が必要です")
 
     video_path = Path(args.video)
 

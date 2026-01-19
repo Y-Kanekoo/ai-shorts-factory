@@ -357,18 +357,33 @@ async def main():
     """CLI実行用"""
     parser = argparse.ArgumentParser(description="動画を合成")
     parser.add_argument(
-        "--audio-metadata", "-a", required=True, help="音声メタデータJSONのパス"
+        "--audio-metadata", "-a", help="音声メタデータJSONのパス"
     )
     parser.add_argument(
-        "--image-metadata", "-i", required=True, help="画像メタデータJSONのパス"
+        "--image-metadata", "-i", help="画像メタデータJSONのパス"
     )
     parser.add_argument("--background", "-b", help="背景動画/画像のパス")
     parser.add_argument("--output", "-o", help="出力ファイルパス")
     parser.add_argument("--width", "-W", type=int, default=1080, help="動画の幅")
     parser.add_argument("--height", "-H", type=int, default=1920, help="動画の高さ")
     parser.add_argument("--fps", type=int, default=30, help="フレームレート")
+    parser.add_argument("--input-json", help="入力パラメータJSONファイルのパス（n8n連携用）")
 
     args = parser.parse_args()
+
+    # JSONファイルからパラメータを読み込み（n8n連携用）
+    if args.input_json:
+        import json
+
+        with open(args.input_json, encoding="utf-8") as f:
+            params = json.load(f)
+        args.audio_metadata = params.get("audio_metadata_path")
+        args.image_metadata = params.get("image_metadata_path")
+        args.output = params.get("output_path")
+        args.background = params.get("background_path")
+
+    if not args.audio_metadata or not args.image_metadata:
+        parser.error("--audio-metadata と --image-metadata、または --input-json が必要です")
 
     composer = VideoComposer(
         width=args.width,
