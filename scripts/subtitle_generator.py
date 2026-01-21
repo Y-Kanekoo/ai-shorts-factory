@@ -53,7 +53,7 @@ class SubtitleGenerator:
         logger.info(f"音声から字幕を生成中: {audio_path}")
 
         # Whisperはブロッキングなので別スレッドで実行
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         model = self._get_model()
 
         result = await loop.run_in_executor(

@@ -29,7 +29,6 @@ from scripts.constants import (
     SUBTITLE_PADDING,
     SUBTITLE_STROKE_WIDTH,
 )
-from scripts.subtitle_generator import SubtitleGenerator
 from scripts.utils.file_handler import FileHandler
 from scripts.utils.logger import get_logger
 
@@ -118,19 +117,7 @@ class VideoComposer:
         self.height = height or config.VIDEO_HEIGHT
         self.fps = fps or config.VIDEO_FPS
         self.font = font or _find_available_font()
-        self.subtitle_generator = SubtitleGenerator()
         logger.info(f"VideoComposer初期化: {self.width}x{self.height}@{self.fps}fps, font={self.font}")
-
-    def _create_image_clip(
-        self,
-        image_path: Path,
-        duration: float,
-    ) -> ImageClip:
-        """画像からクリップを作成"""
-        clip = ImageClip(str(image_path))
-        clip = clip.with_duration(duration)
-        clip = clip.resized((self.width, self.height))
-        return clip
 
     def _create_background_clip(
         self,
