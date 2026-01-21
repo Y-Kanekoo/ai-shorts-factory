@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import Any
 
 from huggingface_hub import InferenceClient
-from huggingface_hub.utils import HfHubHTTPError
 
 from scripts.config import config
 from scripts.utils.file_handler import FileHandler
@@ -157,27 +156,20 @@ class ScriptGenerator:
     @with_retry(max_attempts=MAX_RETRY_ATTEMPTS, min_wait=RETRY_MIN_WAIT, max_wait=RETRY_MAX_WAIT)
     async def _call_api_with_retry(self, prompt: str) -> str:
         """リトライ付きでAPIを呼び出し"""
-        try:
-            # run_in_executorで同期APIを非同期化
-            loop = asyncio.get_running_loop()
-            response = await loop.run_in_executor(
-                None,
-                lambda: self.client.text_generation(
-                    prompt,
-                    model=self.model_id,
-                    max_new_tokens=config.HF_MAX_TOKENS,
-                    temperature=0.7,
-                    top_p=0.9,
-                    repetition_penalty=1.1,
-                ),
-            )
-            return response
-        except HfHubHTTPError as e:
-            logger.warning(f"Hugging Face APIエラー: {e}")
-            raise
-        except Exception as e:
-            logger.error(f"予期しないエラー: {e}")
-            raise ScriptGenerationError(f"API呼び出しに失敗しました: {e}") from e
+        # run_in_executorで同期APIを非同期化
+        loop = asyncio.get_running_loop()
+        response = await loop.run_in_executor(
+            None,
+            lambda: self.client.text_generation(
+                prompt,
+                model=self.model_id,
+                max_new_tokens=config.HF_MAX_TOKENS,
+                temperature=0.7,
+                top_p=0.9,
+                repetition_penalty=1.1,
+            ),
+        )
+        return response
 
     async def _extract_json_with_retry(
         self, response: str, original_prompt: str, max_attempts: int = 2
