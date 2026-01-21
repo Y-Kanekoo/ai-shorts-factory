@@ -49,6 +49,7 @@ class MediaFetcher:
         self._validate_config()
         self.base_url = config.PEXELS_VIDEOS_URL
         self._client: httpx.AsyncClient | None = None
+        self._download_client: httpx.AsyncClient | None = None
 
     def _validate_config(self) -> None:
         """設定を検証"""
@@ -67,11 +68,23 @@ class MediaFetcher:
             )
         return self._client
 
+    async def _get_download_client(self) -> httpx.AsyncClient:
+        """ダウンロード用クライアントを取得（長いタイムアウト設定）"""
+        if self._download_client is None or self._download_client.is_closed:
+            self._download_client = httpx.AsyncClient(
+                timeout=httpx.Timeout(120.0),
+                limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
+            )
+        return self._download_client
+
     async def close(self) -> None:
         """クライアントを閉じる"""
         if self._client is not None and not self._client.is_closed:
             await self._client.aclose()
             self._client = None
+        if self._download_client is not None and not self._download_client.is_closed:
+            await self._download_client.aclose()
+            self._download_client = None
 
     async def __aenter__(self) -> Self:
         """コンテキストマネージャーのエントリ"""
@@ -274,15 +287,15 @@ class MediaFetcher:
         """
         logger.info(f"動画をダウンロード中: {video_url[:50]}...")
 
-        # ダウンロード用に長めのタイムアウトを設定
-        async with httpx.AsyncClient(timeout=httpx.Timeout(120.0)) as client:
-            async with client.stream("GET", video_url) as response:
-                response.raise_for_status()
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-                # 非同期ファイル書き込み（イベントループをブロックしない）
-                async with aiofiles.open(output_path, "wb") as f:
-                    async for chunk in response.aiter_bytes(chunk_size=8192):
-                        await f.write(chunk)
+        # 永続ダウンロードクライアントを使用（コネクションプール再利用）
+        client = await self._get_download_client()
+        async with client.stream("GET", video_url) as response:
+            response.raise_for_status()
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            # 非同期ファイル書き込み（イベントループをブロックしない）
+            async with aiofiles.open(output_path, "wb") as f:
+                async for chunk in response.aiter_bytes(chunk_size=8192):
+                    await f.write(chunk)
 
         logger.info(f"動画を保存しました: {output_path}")
         return output_path

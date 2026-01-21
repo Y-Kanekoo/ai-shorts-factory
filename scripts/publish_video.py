@@ -106,6 +106,12 @@ class VideoPublisher:
         # 動画メタデータを取得
         metadata = self._get_video_metadata(video_path)
 
+        # メタデータ取得失敗時は警告を追加
+        if not metadata:
+            warnings.append(
+                "動画メタデータを取得できませんでした。検証が不完全な可能性があります。"
+            )
+
         # duration引数がなければメタデータから取得
         actual_duration = duration if duration is not None else metadata.get("duration")
 

@@ -101,6 +101,45 @@ class ImageGenerator:
 
             return img_resized.crop((left, top, right, bottom))
 
+    def _calculate_api_dimensions(
+        self,
+        target_width: int,
+        target_height: int,
+    ) -> tuple[int, int]:
+        """
+        アスペクト比を保持しながらFLUX.1の制限内に収めるサイズを計算
+
+        Args:
+            target_width: 目標の幅
+            target_height: 目標の高さ
+
+        Returns:
+            (api_width, api_height) のタプル
+        """
+        # 既に制限内ならそのまま返す
+        if target_width <= FLUX_MAX_WIDTH and target_height <= FLUX_MAX_HEIGHT:
+            return target_width, target_height
+
+        # アスペクト比を計算
+        aspect_ratio = target_width / target_height
+
+        # 幅と高さそれぞれでスケール係数を計算
+        width_scale = FLUX_MAX_WIDTH / target_width if target_width > FLUX_MAX_WIDTH else 1.0
+        height_scale = FLUX_MAX_HEIGHT / target_height if target_height > FLUX_MAX_HEIGHT else 1.0
+
+        # より小さいスケールを使用（両方の制限を満たすため）
+        scale = min(width_scale, height_scale)
+
+        # 新しいサイズを計算（偶数に丸める - 一部のモデルで必要）
+        api_width = int(target_width * scale) // 2 * 2
+        api_height = int(target_height * scale) // 2 * 2
+
+        # 最小サイズを保証
+        api_width = max(api_width, 64)
+        api_height = max(api_height, 64)
+
+        return api_width, api_height
+
     @with_retry(
         max_attempts=MAX_RETRY_ATTEMPTS,
         min_wait=RETRY_MIN_WAIT,
@@ -172,14 +211,18 @@ class ImageGenerator:
 
         logger.info(f"画像生成を開始: {prompt[:50]}...")
 
+        # アスペクト比を保持しながらFLUX.1の制限内に収める
+        api_width, api_height = self._calculate_api_dimensions(width, height)
+        logger.debug(f"API呼び出しサイズ: {api_width}x{api_height} (ターゲット: {width}x{height})")
+
         try:
             # FLUX.1 schnellのAPI呼び出し（リトライ付き）
             image_path = await self._call_flux_api(
                 prompt=prompt,
                 seed=seed,
                 randomize_seed=seed == 0,
-                width=min(width, FLUX_MAX_WIDTH),
-                height=min(height, FLUX_MAX_HEIGHT),
+                width=api_width,
+                height=api_height,
                 num_inference_steps=num_inference_steps,
             )
 
