@@ -239,6 +239,8 @@ class ImageGenerator:
         script_data: dict[str, Any],
         width: int | None = None,
         height: int | None = None,
+        output_dir: Path | None = None,
+        output_prefix: str | None = None,
     ) -> list[dict[str, Any]]:
         """
         台本から複数の画像を生成
@@ -247,6 +249,8 @@ class ImageGenerator:
             script_data: 台本データ
             width: 画像の幅
             height: 画像の高さ
+            output_dir: 出力ディレクトリ（指定時は即座にファイル保存）
+            output_prefix: 出力ファイル名のプレフィックス
 
         Returns:
             画像情報のリスト
@@ -264,21 +268,33 @@ class ImageGenerator:
 
             try:
                 image = await self.generate(prompt, width, height)
-                results.append(
-                    {
-                        "index": i,
-                        "prompt": prompt,
-                        "image": image,
-                        "text": narration.get("text", ""),
-                    }
-                )
+                result = {
+                    "index": i,
+                    "prompt": prompt,
+                    "text": narration.get("text", ""),
+                }
+
+                # 出力ディレクトリが指定されている場合は即座に保存してメモリ解放
+                if output_dir and output_prefix:
+                    filename = f"{output_prefix}_{i:02d}.png"
+                    filepath = output_dir / filename
+                    image.save(filepath, "PNG")
+                    logger.info(f"画像を保存しました: {filepath}")
+                    result["filepath"] = str(filepath)
+                    # 画像オブジェクトを閉じてメモリ解放
+                    image.close()
+                else:
+                    # 後方互換性のため、ディレクトリ未指定時はメモリに保持
+                    result["image"] = image
+
+                results.append(result)
             except Exception as e:
                 logger.error(f"画像生成エラー: index={i}, error={e}")
                 results.append(
                     {
                         "index": i,
                         "prompt": prompt,
-                        "image": None,
+                        "filepath": None,
                         "error": str(e),
                         "text": narration.get("text", ""),
                     }
@@ -307,19 +323,25 @@ class ImageGenerator:
         """
         config.ensure_directories()
 
-        # 画像を生成
-        results = await self.generate_from_script(script_data, width, height)
-
         # プレフィックスを決定
         if output_prefix is None:
             timestamp = FileHandler.generate_filename("image", "")[:-1]
             output_prefix = timestamp
 
-        # 各画像ファイルを保存
+        # 画像を生成（即座にファイル保存してメモリ解放）
+        results = await self.generate_from_script(
+            script_data,
+            width,
+            height,
+            output_dir=config.images_output_dir,
+            output_prefix=output_prefix,
+        )
+
+        # 出力ファイル情報を整理
         output_files = []
 
         for result in results:
-            if result.get("image") is None:
+            if result.get("filepath") is None:
                 output_files.append(
                     {
                         "index": result["index"],
@@ -330,17 +352,10 @@ class ImageGenerator:
                 )
                 continue
 
-            filename = f"{output_prefix}_{result['index']:02d}.png"
-            filepath = config.images_output_dir / filename
-
-            # 画像を保存
-            result["image"].save(filepath, "PNG")
-            logger.info(f"画像を保存しました: {filepath}")
-
             output_files.append(
                 {
                     "index": result["index"],
-                    "filepath": str(filepath),
+                    "filepath": result["filepath"],
                     "prompt": result["prompt"],
                     "text": result["text"],
                 }

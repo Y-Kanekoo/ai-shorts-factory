@@ -161,16 +161,13 @@ class VoicevoxClient:
         Raises:
             VoicevoxError: クエリ作成に失敗した場合
         """
-        try:
-            client = await self._get_client()
-            response = await client.post(
-                f"{self.base_url}/audio_query",
-                params={"text": text, "speaker": speaker_id},
-            )
-            response.raise_for_status()
-            return response.json()
-        except httpx.HTTPStatusError as e:
-            raise VoicevoxError(f"音声クエリの作成に失敗しました: {e}") from e
+        client = await self._get_client()
+        response = await client.post(
+            f"{self.base_url}/audio_query",
+            params={"text": text, "speaker": speaker_id},
+        )
+        response.raise_for_status()
+        return response.json()
 
     @with_retry(
         max_attempts=MAX_RETRY_ATTEMPTS,
@@ -195,17 +192,14 @@ class VoicevoxClient:
         Raises:
             VoicevoxError: 音声合成に失敗した場合
         """
-        try:
-            client = await self._get_client()
-            response = await client.post(
-                f"{self.base_url}/synthesis",
-                params={"speaker": speaker_id},
-                json=audio_query,
-            )
-            response.raise_for_status()
-            return response.content
-        except httpx.HTTPStatusError as e:
-            raise VoicevoxError(f"音声合成に失敗しました: {e}") from e
+        client = await self._get_client()
+        response = await client.post(
+            f"{self.base_url}/synthesis",
+            params={"speaker": speaker_id},
+            json=audio_query,
+        )
+        response.raise_for_status()
+        return response.content
 
     async def text_to_speech(
         self,

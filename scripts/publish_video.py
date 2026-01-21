@@ -335,12 +335,13 @@ class VideoPublisher:
         video = current["items"][0]
 
         # 更新するフィールドを設定
+        # Noneは既存値維持、空文字/空リストはクリアとして扱う
         body = {
             "id": video_id,
             "snippet": {
-                "title": title or video["snippet"]["title"],
-                "description": description or video["snippet"]["description"],
-                "tags": tags or video["snippet"].get("tags", []),
+                "title": video["snippet"]["title"] if title is None else title,
+                "description": video["snippet"]["description"] if description is None else description,
+                "tags": video["snippet"].get("tags", []) if tags is None else tags,
                 "categoryId": video["snippet"]["categoryId"],
             },
         }

@@ -74,6 +74,8 @@ class VoiceGenerator:
         self,
         script_data: dict[str, Any],
         settings: VoiceSettings | None = None,
+        output_dir: Path | None = None,
+        output_prefix: str | None = None,
     ) -> list[dict[str, Any]]:
         """
         台本から複数の音声を生成
@@ -81,9 +83,11 @@ class VoiceGenerator:
         Args:
             script_data: 台本データ
             settings: 音声設定
+            output_dir: 出力ディレクトリ（指定時は即座にファイル保存）
+            output_prefix: 出力ファイル名のプレフィックス
 
         Returns:
-            音声情報のリスト（各要素に音声データと長さを含む）
+            音声情報のリスト
         """
         narrations = script_data.get("narration", [])
         results = []
@@ -96,15 +100,24 @@ class VoiceGenerator:
             logger.info(f"音声生成中: {i + 1}/{len(narrations)}")
             audio_data, duration = await self.generate_single(text, settings)
 
-            results.append(
-                {
-                    "index": i,
-                    "text": text,
-                    "audio_data": audio_data,
-                    "duration": duration,
-                    "image_prompt": narration.get("image_prompt", ""),
-                }
-            )
+            result = {
+                "index": i,
+                "text": text,
+                "duration": duration,
+                "image_prompt": narration.get("image_prompt", ""),
+            }
+
+            # 出力ディレクトリが指定されている場合は即座に保存してメモリ解放
+            if output_dir and output_prefix:
+                filename = f"{output_prefix}_{i:02d}.wav"
+                filepath = output_dir / filename
+                await FileHandler.save_binary_async(audio_data, filepath)
+                result["filepath"] = str(filepath)
+            else:
+                # 後方互換性のため、ディレクトリ未指定時はメモリに保持
+                result["audio_data"] = audio_data
+
+            results.append(result)
 
         return results
 
@@ -130,27 +143,28 @@ class VoiceGenerator:
         if not await self.check_voicevox_status():
             raise ConnectionError("VOICEVOX Engineに接続できません")
 
-        # 音声を生成
-        results = await self.generate_from_script(script_data, settings)
-
         # プレフィックスを決定
         if output_prefix is None:
             timestamp = FileHandler.generate_filename("voice", "")[:-1]  # 拡張子を除去
             output_prefix = timestamp
 
-        # 各音声ファイルを保存
+        # 音声を生成（即座にファイル保存してメモリ解放）
+        results = await self.generate_from_script(
+            script_data,
+            settings,
+            output_dir=config.audio_output_dir,
+            output_prefix=output_prefix,
+        )
+
+        # 出力ファイル情報を整理
         output_files = []
         total_duration = 0
 
         for result in results:
-            filename = f"{output_prefix}_{result['index']:02d}.wav"
-            filepath = config.audio_output_dir / filename
-            await FileHandler.save_binary_async(result["audio_data"], filepath)
-
             output_files.append(
                 {
                     "index": result["index"],
-                    "filepath": str(filepath),
+                    "filepath": result["filepath"],
                     "text": result["text"],
                     "duration": result["duration"],
                     "image_prompt": result["image_prompt"],
