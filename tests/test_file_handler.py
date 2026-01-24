@@ -21,11 +21,12 @@ class TestFileHandler:
 
         assert filename.startswith("test_")
         assert filename.endswith(".json")
-        # タイムスタンプ形式のチェック: test_YYYYMMDD_HHMMSS.json
+        # タイムスタンプ形式のチェック: test_YYYYMMDD_HHMMSS_ffffff.json
         parts = filename.replace("test_", "").replace(".json", "").split("_")
-        assert len(parts) == 2
+        assert len(parts) == 3
         assert len(parts[0]) == 8  # YYYYMMDD
         assert len(parts[1]) == 6  # HHMMSS
+        assert len(parts[2]) == 6  # ffffff（マイクロ秒）
 
     def test_save_json(self, tmp_path):
         """JSON保存のテスト"""
@@ -236,20 +237,33 @@ class TestFileHandlerCleanup:
 
     def test_cleanup_temp_files_empty_dir(self, tmp_path, monkeypatch):
         """空のディレクトリでのクリーンアップテスト"""
-        from scripts import config as config_module
+        from unittest.mock import PropertyMock, patch
 
-        # configのtemp_dirをモック
-        monkeypatch.setattr(config_module.config, "temp_dir", tmp_path / "temp")
-        (tmp_path / "temp").mkdir()
+        temp_dir = tmp_path / "temp"
+        temp_dir.mkdir()
 
-        deleted = FileHandler.cleanup_temp_files()
-        assert deleted == 0
+        # Pydanticプロパティをモック
+        with patch.object(
+            type(__import__("scripts.config", fromlist=["config"]).config),
+            "temp_dir",
+            new_callable=PropertyMock,
+            return_value=temp_dir,
+        ):
+            deleted = FileHandler.cleanup_temp_files()
+            assert deleted == 0
 
     def test_cleanup_temp_files_nonexistent_dir(self, tmp_path, monkeypatch):
         """存在しないディレクトリでのクリーンアップテスト"""
-        from scripts import config as config_module
+        from unittest.mock import PropertyMock, patch
 
-        monkeypatch.setattr(config_module.config, "temp_dir", tmp_path / "nonexistent")
+        nonexistent_dir = tmp_path / "nonexistent"
 
-        deleted = FileHandler.cleanup_temp_files()
-        assert deleted == 0
+        # Pydanticプロパティをモック
+        with patch.object(
+            type(__import__("scripts.config", fromlist=["config"]).config),
+            "temp_dir",
+            new_callable=PropertyMock,
+            return_value=nonexistent_dir,
+        ):
+            deleted = FileHandler.cleanup_temp_files()
+            assert deleted == 0

@@ -98,26 +98,39 @@ class VoiceGenerator:
                 continue
 
             logger.info(f"音声生成中: {i + 1}/{len(narrations)}")
-            audio_data, duration = await self.generate_single(text, settings)
 
-            result = {
-                "index": i,
-                "text": text,
-                "duration": duration,
-                "image_prompt": narration.get("image_prompt", ""),
-            }
+            try:
+                audio_data, duration = await self.generate_single(text, settings)
 
-            # 出力ディレクトリが指定されている場合は即座に保存してメモリ解放
-            if output_dir and output_prefix:
-                filename = f"{output_prefix}_{i:02d}.wav"
-                filepath = output_dir / filename
-                await FileHandler.save_binary_async(audio_data, filepath)
-                result["filepath"] = str(filepath)
-            else:
-                # 後方互換性のため、ディレクトリ未指定時はメモリに保持
-                result["audio_data"] = audio_data
+                result = {
+                    "index": i,
+                    "text": text,
+                    "duration": duration,
+                    "image_prompt": narration.get("image_prompt", ""),
+                }
 
-            results.append(result)
+                # 出力ディレクトリが指定されている場合は即座に保存してメモリ解放
+                if output_dir and output_prefix:
+                    filename = f"{output_prefix}_{i:02d}.wav"
+                    filepath = output_dir / filename
+                    await FileHandler.save_binary_async(audio_data, filepath)
+                    result["filepath"] = str(filepath)
+                else:
+                    # 後方互換性のため、ディレクトリ未指定時はメモリに保持
+                    result["audio_data"] = audio_data
+
+                results.append(result)
+            except Exception as e:
+                logger.error(f"音声生成エラー: index={i}, error={e}")
+                results.append(
+                    {
+                        "index": i,
+                        "text": text,
+                        "filepath": None,
+                        "error": str(e),
+                        "image_prompt": narration.get("image_prompt", ""),
+                    }
+                )
 
         return results
 
@@ -156,11 +169,24 @@ class VoiceGenerator:
             output_prefix=output_prefix,
         )
 
-        # 出力ファイル情報を整理
+        # 出力ファイル情報を整理（エラー結果も含める）
         output_files = []
+        error_files = []
         total_duration = 0
 
         for result in results:
+            # エラー結果の場合（filepathがNone）
+            if result.get("filepath") is None:
+                error_files.append(
+                    {
+                        "index": result["index"],
+                        "text": result["text"],
+                        "error": result.get("error", "Unknown error"),
+                        "image_prompt": result.get("image_prompt", ""),
+                    }
+                )
+                continue
+
             output_files.append(
                 {
                     "index": result["index"],
@@ -177,6 +203,7 @@ class VoiceGenerator:
             "script_title": script_data.get("title", ""),
             "total_duration": total_duration,
             "files": output_files,
+            "errors": error_files if error_files else None,
             "settings": {
                 "speaker_id": settings.speaker_id if settings else config.VOICEVOX_SPEAKER_ID,
                 "speed": settings.speed if settings else 1.0,

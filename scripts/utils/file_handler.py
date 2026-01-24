@@ -35,7 +35,8 @@ class FileHandler:
         Returns:
             生成されたファイル名
         """
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # ミリ秒まで含めて衝突を防止
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         return f"{prefix}_{timestamp}.{extension}"
 
     @staticmethod

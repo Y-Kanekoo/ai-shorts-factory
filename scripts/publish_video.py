@@ -183,6 +183,11 @@ class VideoPublisher:
             PublishError: 検証に失敗した場合
         """
         video_path = Path(video_path)
+
+        # ファイル存在チェック（Shorts検証とは別に常に実行）
+        if not video_path.exists():
+            raise PublishError(f"動画ファイルが見つかりません: {video_path}")
+
         logger.info(f"動画アップロードを開始: {title}")
 
         # Shorts要件の検証

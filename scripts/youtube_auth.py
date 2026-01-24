@@ -5,6 +5,8 @@ YouTube Data API v3のOAuth2認証を管理
 """
 
 import json
+import os
+import stat
 from pathlib import Path
 
 from google.auth.transport.requests import Request
@@ -53,8 +55,12 @@ class YouTubeAuth:
         if not self.token_file.exists():
             return None
 
-        # ファイルパーミッションをチェック（警告のみ）
-        FileHandler.check_file_permissions(self.token_file)
+        # ファイルパーミッションをチェック、安全でなければ自動修正
+        if not FileHandler.check_file_permissions(self.token_file):
+            logger.warning(
+                f"トークンファイルのパーミッションを修正します: {self.token_file}"
+            )
+            os.chmod(self.token_file, stat.S_IRUSR | stat.S_IWUSR)  # 0o600
 
         try:
             with open(self.token_file, encoding="utf-8") as f:
@@ -73,6 +79,8 @@ class YouTubeAuth:
             "client_id": credentials.client_id,
             "client_secret": credentials.client_secret,
             "scopes": list(credentials.scopes) if credentials.scopes else [],
+            # expiryを保存（リフレッシュ判定に必要）
+            "expiry": credentials.expiry.isoformat() if credentials.expiry else None,
         }
         # セキュアなファイル保存（所有者のみ読み書き可能）
         FileHandler.save_secure_json(token_data, self.token_file)

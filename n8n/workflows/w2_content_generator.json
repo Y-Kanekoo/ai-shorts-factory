@@ -2,13 +2,23 @@
   "name": "W2: Content Generator（コンテンツ生成）",
   "nodes": [
     {
-      "parameters": {},
+      "parameters": {
+        "httpMethod": "POST",
+        "authentication": "headerAuth",
+        "options": {}
+      },
       "id": "webhook-trigger",
       "name": "Webhook受信",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1.1,
       "position": [250, 300],
-      "webhookId": "w2-content-generator"
+      "webhookId": "w2-content-generator",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webhook-auth",
+          "name": "Webhook認証"
+        }
+      }
     },
     {
       "parameters": {
@@ -70,7 +80,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// 音声と画像の結果を統合\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  results.push({\n    index: item.json.index,\n    text: item.json.text,\n    audio_path: item.json.audio_path,\n    image_path: item.json.image_path,\n    duration: item.json.duration\n  });\n}\n\nreturn { files: results };"
+        "jsCode": "// 音声と画像の結果を統合してメタデータJSONを生成\nconst fs = require('fs');\nconst items = $input.all();\nconst timestamp = Date.now();\n\n// 音声メタデータ\nconst audioFiles = [];\nlet totalDuration = 0;\nfor (const item of items) {\n  if (item.json.audio_path) {\n    audioFiles.push({\n      index: item.json.index,\n      filepath: item.json.audio_path,\n      text: item.json.text,\n      duration: item.json.duration || 3.0,\n      image_prompt: item.json.image_prompt || ''\n    });\n    totalDuration += item.json.duration || 3.0;\n  }\n}\n\nconst audioMetadata = {\n  script_title: $input.first().json.title || 'Untitled',\n  total_duration: totalDuration,\n  files: audioFiles\n};\n\n// 画像メタデータ\nconst imageFiles = [];\nfor (const item of items) {\n  if (item.json.image_path) {\n    imageFiles.push({\n      index: item.json.index,\n      filepath: item.json.image_path,\n      prompt: item.json.image_prompt || '',\n      text: item.json.text\n    });\n  }\n}\n\nconst imageMetadata = {\n  script_title: $input.first().json.title || 'Untitled',\n  files: imageFiles\n};\n\n// メタデータをJSONファイルに保存\nconst outputDir = '/home/node/output';\nconst audioMetadataPath = `${outputDir}/audio/voice_${timestamp}_metadata.json`;\nconst imageMetadataPath = `${outputDir}/images/image_${timestamp}_metadata.json`;\n\nfs.mkdirSync(`${outputDir}/audio`, { recursive: true });\nfs.mkdirSync(`${outputDir}/images`, { recursive: true });\nfs.writeFileSync(audioMetadataPath, JSON.stringify(audioMetadata, null, 2));\nfs.writeFileSync(imageMetadataPath, JSON.stringify(imageMetadata, null, 2));\n\nreturn {\n  audio_metadata_path: audioMetadataPath,\n  image_metadata_path: imageMetadataPath,\n  total_duration: totalDuration\n};"
       },
       "id": "merge-results",
       "name": "結果統合",

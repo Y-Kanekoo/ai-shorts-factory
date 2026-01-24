@@ -208,9 +208,29 @@ class VideoComposer:
         audio_clips = []
         current_time = 0.0
 
+        # 背景動画のキャッシュ（一度だけ読み込み）
+        cached_bg_video: VideoFileClip | None = None
+        if background_path and background_path.exists():
+            suffix = background_path.suffix.lower()
+            if suffix in [".mp4", ".mov", ".avi", ".webm"]:
+                cached_bg_video = track(VideoFileClip(str(background_path)))
+                # リサイズを事前に行う
+                cached_bg_video = cached_bg_video.resized(height=self.height)
+                if cached_bg_video.w < self.width:
+                    cached_bg_video = cached_bg_video.resized(width=self.width)
+                logger.debug(f"背景動画をキャッシュしました: {background_path}")
+
         # 音声と画像のペアからクリップを作成
         for audio_info in audio_files:
-            audio_path = Path(audio_info["filepath"])
+            # filepathの検証
+            filepath_str = audio_info.get("filepath")
+            if not filepath_str:
+                logger.warning(f"音声ファイルパスがありません: index={audio_info.get('index')}")
+                continue
+            audio_path = Path(filepath_str)
+            if not audio_path.exists():
+                logger.warning(f"音声ファイルが存在しません: {audio_path}")
+                continue
             duration = audio_info.get("duration", 3.0)
             index = audio_info.get("index", 0)
             text = audio_info.get("text", "")
@@ -221,8 +241,28 @@ class VideoComposer:
                 None,
             )
 
-            # 背景クリップを作成
-            if background_path and background_path.exists():
+            # 背景クリップを作成（キャッシュを活用）
+            if cached_bg_video is not None:
+                # キャッシュした背景動画から該当時間を切り出し
+                bg_duration = cached_bg_video.duration
+                if bg_duration < duration:
+                    # ループして必要な長さにする
+                    loops = int(duration / bg_duration) + 1
+                    bg_clip = track(concatenate_videoclips([cached_bg_video] * loops))
+                else:
+                    bg_clip = cached_bg_video
+                bg_clip = track(bg_clip.subclipped(0, duration))
+                # 中央でクロップ
+                x_center = bg_clip.w / 2
+                y_center = bg_clip.h / 2
+                bg_clip = bg_clip.cropped(
+                    x1=x_center - self.width / 2,
+                    y1=y_center - self.height / 2,
+                    x2=x_center + self.width / 2,
+                    y2=y_center + self.height / 2,
+                )
+            elif background_path and background_path.exists():
+                # 画像背景の場合
                 bg_clip = track(self._create_background_clip(background_path, duration))
             elif image_info and image_info.get("filepath"):
                 # 画像を背景として使用
@@ -316,9 +356,10 @@ class VideoComposer:
                 clip_manager=clip_manager,
             )
 
-            # 動画を書き出し
+            # 動画を書き出し（スレッドプールで実行してブロッキングを回避）
             logger.info(f"動画を書き出し中: {output_path}")
-            video.write_videofile(
+            await asyncio.to_thread(
+                video.write_videofile,
                 str(output_path),
                 fps=self.fps,
                 codec=config.VIDEO_CODEC,

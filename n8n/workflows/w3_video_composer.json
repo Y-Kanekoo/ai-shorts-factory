@@ -2,13 +2,23 @@
   "name": "W3: Video Composer（動画合成）",
   "nodes": [
     {
-      "parameters": {},
+      "parameters": {
+        "httpMethod": "POST",
+        "authentication": "headerAuth",
+        "options": {}
+      },
       "id": "webhook-trigger",
       "name": "Webhook受信",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1.1,
       "position": [250, 300],
-      "webhookId": "w3-video-composer"
+      "webhookId": "w3-video-composer",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webhook-auth",
+          "name": "Webhook認証"
+        }
+      }
     },
     {
       "parameters": {
