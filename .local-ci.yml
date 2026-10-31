@@ -1,0 +1,33 @@
+# local-ci の設定（development-hub テンプレート v1・テスト標準の4段階、既存repo向け）。
+# skip の段階は docs/TESTING.md のスキップ記録と合わせて、整備したら外す。
+fail_fast: true
+setup:
+  - uv sync --dev
+jobs:
+  lint:
+    kind: lint
+    stage: static
+    run: ["uv run ruff check .", "uv run ruff format --check ."]
+  typecheck:
+    kind: typecheck
+    stage: static
+    run: "uv run mypy"
+  secrets:
+    kind: lint
+    stage: static
+    run: "uv run python scripts/scan_secrets.py"
+  unit:
+    kind: test
+    stage: unit
+    run: "uv run pytest --ignore=tests/api"
+  api:
+    kind: api
+    stage: api
+    run: "uv run pytest tests/api"
+  e2e:
+    kind: e2e
+    stage: e2e
+    run: "npx playwright test --grep @smoke"
+    skip: true
+    skip_reason: "Playwright 設定がない（UI がある場合は --extras e2e で雛形を追加）"
+include_auto: false
