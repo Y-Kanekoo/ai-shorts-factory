@@ -4,12 +4,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+Route = tuple[str, str]
+Reply = tuple[int, object]
+Request = tuple[str, str, bytes]
+
 
 @dataclass
 class FakeServer:
     url: str = ""
-    routes: dict[tuple[str, str], tuple[int, object]] = field(default_factory=dict)
-    requests: list[tuple[str, str, bytes]] = field(default_factory=list)
+    routes: dict[Route, Reply] = field(default_factory=dict)
+    requests: list[Request] = field(default_factory=list)
 
     def route(self, method: str, path: str, status: int, body: object) -> None:
         self.routes[(method.upper(), path)] = (status, body)
